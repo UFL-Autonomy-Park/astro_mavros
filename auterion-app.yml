@@ -1,0 +1,17 @@
+auterion-api-version: 1
+auterion-app-base: v2
+
+app-name: astro_mavros
+app-author: com.autonomy
+app-version: 0.0.1
+target-platform: skynode
+
+services:
+  astro_mavros:
+    build: .
+
+compose-override:
+    services:
+        astro_mavros:
+          network_mode: host
+          pid: "host"
