@@ -3,7 +3,7 @@ auterion-app-base: v2
 
 app-name: astro_mavros
 app-author: com.autonomy
-app-version: 0.1.1
+app-version: 0.2.0
 target-platform: skynode
 
 services:
