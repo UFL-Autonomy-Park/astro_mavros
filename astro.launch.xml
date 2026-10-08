@@ -1,0 +1,25 @@
+<launch>
+  <arg name="namespace"/>
+  <!-- mavros_node links its router and plugins over the absolute topics
+       /uas<tgt_system>/mavlink_{source,sink}, ignoring the namespace.
+       tgt_system must match the FCU's MAV_SYS_ID, which Freefly forces to 1 on
+       every Astro, so all Astros share /uas1 and no other vehicle on the
+       network may use system ID 1. See README §2.1. -->
+  <arg name="tgt_system" default="1"/>
+
+  <!-- Topics MAVROS uses under absolute names, which the namespace does not
+       apply to. Every vehicle would share them across the network, so they are
+       remapped under the vehicle's namespace.
+       Check for new ones with: ros2 topic list | grep -v '^/<namespace>/' -->
+  <set_remap from="/tf" to="/$(var namespace)/tf"/>
+  <set_remap from="/tf_static" to="/$(var namespace)/tf_static"/>
+  <set_remap from="/diagnostics" to="/$(var namespace)/diagnostics"/>
+  <set_remap from="/move_base_simple/goal" to="/$(var namespace)/move_base_simple/goal"/>
+
+  <include file="$(find-pkg-share mavros)/launch/px4.launch">
+    <arg name="fcu_url" value="tcp://127.0.0.1:5790"/>
+    <arg name="namespace" value="$(var namespace)"/>
+    <arg name="tgt_system" value="$(var tgt_system)"/>
+    <arg name="respawn_mavros" value="true"/>
+  </include>
+</launch>

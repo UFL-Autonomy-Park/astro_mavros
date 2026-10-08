@@ -28,6 +28,8 @@ RUN apt-get install -y ros-${ROS_DISTRO}-rmw-fastrtps-cpp ros-${ROS_DISTRO}-rmw-
 # reappear in the apt index at a healthy version, revert this block back to
 # the simple apt-get install ros-${ROS_DISTRO}-mavros ros-${ROS_DISTRO}-mavros-msgs
 # ros-${ROS_DISTRO}-mavros-extras that used to live here.
+# NOTE: the issue is marked resolved upstream, but the packages were still
+# broken as of 2026-10-08. Do not revert without testing on an Astro.
 RUN rosdep init && rosdep update 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends git python3-colcon-common-extensions && \
@@ -58,8 +60,10 @@ ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 ENV ROS_LOCALHOST_ONLY=0
 ENV ROS_DOMAIN_ID=0
 ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+# Makes every node a plain discovery-server CLIENT
 ENV ROS_DISCOVERY_SERVER=192.168.1.201:11811
-ENV FASTRTPS_DEFAULT_PROFILES_FILE=/super_client_config.xml
 
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh && fastdds shm clean && ros2 daemon stop && ros2 daemon start
-CMD . /opt/ros/${ROS_DISTRO}/setup.sh && ros2 launch mavros px4.launch fcu_url:=tcp://127.0.0.1:5790 respawn_mavros:=true namespace:=$NAMESPACE
+COPY astro.launch.xml /astro.launch.xml
+# NAMESPACE comes from the app settings (settings.default.env)
+CMD . /opt/ros/${ROS_DISTRO}/setup.sh && ros2 launch /astro.launch.xml namespace:=${NAMESPACE:?set NAMESPACE in the app settings}
