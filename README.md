@@ -1,9 +1,12 @@
 # astro_mavros
 
 MAVROS for the Freefly Astro, packaged as an Auterion OS app. It runs
-MAVROS 2.14.0 in a container on the Astro's Skynode, connects to the flight
+MAVROS 2.16.0 in a container on the Astro's Skynode, connects to the flight
 controller over `tcp://127.0.0.1:5790`, and publishes every topic under a
 per-vehicle namespace via the Fast DDS discovery server at `192.168.1.201:11811`.
+MAVROS's topics and services are under `/<namespace>/mavros/` (e.g.
+`/astro1/mavros/state`); app versions before 0.4.0 ran MAVROS 2.14.0, which
+used `/<namespace>/state`.
 
 This mirrors the MAVROS part of
 [homebrew_docker](https://github.com/UFL-Autonomy-Park/homebrew_docker), minus
@@ -146,12 +149,12 @@ Do this with **the propellers removed** from both Astros and both of them on.
 Arm one and confirm the other stays disarmed:
 
 ```bash
-ros2 topic echo /astro2/state --field armed     # in one terminal
-ros2 service call /astro1/cmd/arming mavros_msgs/srv/CommandBool "{value: true}"
-ros2 service call /astro1/cmd/arming mavros_msgs/srv/CommandBool "{value: false}"
+ros2 topic echo /astro2/mavros/state --field armed     # in one terminal
+ros2 service call /astro1/mavros/cmd/arming mavros_msgs/srv/CommandBool "{value: true}"
+ros2 service call /astro1/mavros/cmd/arming mavros_msgs/srv/CommandBool "{value: false}"
 ```
 
-If astro2 arms too, or `/astro1/cmd/arming` reports success while astro1
+If astro2 arms too, or `/astro1/mavros/cmd/arming` reports success while astro1
 stays disarmed, commands are crossing. In that case, don't run more than one
 Astro with MAVROS at a time.
 
@@ -161,6 +164,15 @@ MAVROS also uses `/tf`, `/tf_static`, `/diagnostics` and
 `/move_base_simple/goal` under absolute names. `astro.launch.xml` remaps
 them under the namespace, e.g. `/astro1/tf`, so vehicles don't hear each
 other's transforms. `/rosout` and `/parameter_events` stay shared by design.
+
+> [!WARNING]
+> **With MAVROS 2.16 the remap no longer reaches `/move_base_simple/goal`.**
+> MAVROS's plugin nodes ignore remaps since 2.15, and that topic belongs to
+> the `guided_target` plugin, so it stays absolute and every Astro shares it.
+> `/tf`, `/tf_static` and `/diagnostics` are still remapped (they belong to
+> MAVROS's main and router nodes). Seen 2026-10-15 running this launch file
+> with MAVROS 2.16.0 on a lab PC (not on an Astro). Nothing in the Autonomy
+> Park stack uses `/move_base_simple/goal`.
 To check for anything else outside the namespace:
 
 ```bash
@@ -173,13 +185,14 @@ You should now see namespaced Astro topics when you run `ros2 topic list`:
 
 ```
 $ ros2 topic list
-/astro1/actuator_control
-/astro1/adsb/send
-/astro1/adsb/vehicle
-/astro1/altitude
-/astro1/battery
-/astro1/cam_imu_sync/cam_imu_stamp
-/astro1/camera/image_captured
+/astro1/diagnostics
+/astro1/mavros/actuator_control
+/astro1/mavros/adsb/send
+/astro1/mavros/adsb/vehicle
+/astro1/mavros/altitude
+/astro1/mavros/battery
+/astro1/mavros/camera/image_captured
+/astro1/mavros/cam_imu_sync/cam_imu_stamp
 ...
 ```
 
@@ -200,7 +213,7 @@ completes. Run it again.
 Verify that messages are being published by echoing an active topic:
 
 ```bash
-ros2 topic echo /astro1/battery
+ros2 topic echo /astro1/mavros/battery
 ```
 
 Example output:
@@ -236,11 +249,20 @@ serial_number: ''
 
 ## 4. Development notes
 
-- **MAVROS is built from source at 2.14.0.** The apt packages for MAVROS on
-  Humble/jammy broke in September 2026
-  ([mavlink/mavros#2293](https://github.com/mavlink/mavros/issues/2293)). The
-  issue is marked resolved upstream, but the packages were **still broken**
-  as of 2026-10-08. Don't switch back to apt without testing on an Astro.
+- **MAVROS 2.16.0 from apt, pinned to exact arm64 builds** (`Dockerfile`, same
+  versions as homebrew_docker). Until 0.3.0, MAVROS 2.14.0 was built from
+  source because the apt packages were missing
+  ([mavlink/mavros#2293](https://github.com/mavlink/mavros/issues/2293),
+  closed 2026-09-27); a note then said they were "still broken as of
+  2026-10-08" without saying how. **0.4.0 has not been tested on an Astro.**
+  Before deploying it, install it on one Astro and check, on the lab PC:
+  `ros2 topic echo --once /astro1/mavros/state --field connected` prints
+  `true`, the battery echo in [3](#3-verifying) shows data, and the arming
+  test in [2.1](#21-mavlink-system-ids) passes (propellers removed).
+- **Pinned versions can disappear.** The ROS apt repo keeps only the newest
+  build, so once MAVROS publishes a newer one the Docker build fails at the
+  MAVROS step. Then read MAVROS's changelog for topic changes and update the
+  four versions in the `Dockerfile` together.
 - **Bump `app-version` in `auterion-app.yml` for every release.** The build
   file name includes the version.
 - **Discovery server address:** set by `ROS_DISCOVERY_SERVER` in the
