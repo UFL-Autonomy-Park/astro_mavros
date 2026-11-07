@@ -57,11 +57,15 @@ $ auterion-cli device select 131502818
 Selected device with ID 131502818 on address 192.168.1.121
 ```
 
-Clone and build the astro_mavros package from GitHub:
+Clone the astro_mavros package from GitHub:
 
 ```bash
 git clone https://github.com/UFL-Autonomy-Park/astro_mavros
 cd astro_mavros
+```
+
+Build it.
+```bash
 auterion-cli app build
 ```
 
