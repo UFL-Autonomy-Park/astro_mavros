@@ -260,7 +260,54 @@ serial_number: ''
 - **Testing a new version.** Install it on one Astro and check, on the lab
   PC: `ros2 topic echo --once /astro1/mavros/state --field connected` prints
   `true`, the battery echo in [3](#3-verifying) shows data, and the arming
-  test in [2.1](#21-mavlink-system-ids) passes (propellers removed).
+  test in [2.1](#21-mavlink-system-ids) passes (propellers removed). Also
+  check that the Astro answers a service call, which fails if the network
+  fix below is not working:
+
+  ```bash
+  ros2 service call /astro1/mavros/cmd/list_parameters rcl_interfaces/srv/ListParameters "{}"
+  ```
+- **Fast DDS is restricted to the LAN address (0.5.2).** `astro_entrypoint.sh`
+  finds the local address the Skynode uses to reach the discovery server
+  (`192.168.1.121` on astro1), writes a Fast DDS profile into `/tmp` that
+  limits UDP to that address (shared memory stays on), and exports it as
+  `FASTRTPS_DEFAULT_PROFILES_FILE` before launching MAVROS. If there is no
+  route to the server after 60 s it starts without the profile and prints a
+  warning.
+
+  **Why.** The app runs with `network_mode: host`, so Fast DDS advertised
+  every address on the Skynode: `10.41.10.1`, `10.0.0.1` and the Docker
+  bridge `172.17.0.1`. A lab PC cannot reach any of them. On 2026-11-06,
+  from a PC at `192.168.1.12` (a tcpdump on all interfaces), everything the PC sent to the
+  Astro's DDS port 7419 went to those three addresses and none to
+  `192.168.1.121`: the first two left through the router and were lost, and
+  `172.17.0.1` is also the PC's own Docker bridge address, so that traffic
+  was delivered to the PC itself. The Astro's packets to the PC did arrive.
+
+  **What it broke.** Whatever needs the PC to send to the Astro:
+  - Services never answered, including a plain `list_parameters` and
+    `cmd/command`, so `aero_px4_interface`'s request for PX4's EKF origin
+    never reached MAVROS and `autonomy_park/pose` was never published.
+  - Latched topics (`TRANSIENT_LOCAL`: `mavros/state`, `gp_origin`) never
+    replayed to a new subscriber, because the replay is requested by the
+    subscriber. `ros2 topic echo /astro1/mavros/state` printed only
+    "A message was lost!!!".
+  - Plain best-effort or volatile topics from the Astro worked, which hid the
+    fault. So did reliable and volatile ones, which need no reply unless a
+    sample is lost.
+
+  **How it was confirmed.** Redirecting the three advertised addresses to
+  `192.168.1.121` on the PC (iptables DNAT, nothing changed on the Astro)
+  fixed the service call and the default `state` echo at once. This version
+  is not yet tested on an Astro. The profile was tried on the lab PC:
+  it loads, and a node using it binds only `192.168.1.12`. The PC-side rules
+  were temporary and are not part of the app.
+
+  **If it comes back.** Capture on the lab PC while calling a service:
+  `sudo tcpdump -ni any 'udp and dst portrange 7400-7700 and not dst net 224.0.0.0/4 and not host 192.168.1.201'`.
+  Destinations other than the Astro's LAN address mean it is advertising
+  another address again. A DHCP change of the Astro's address is handled at
+  start-up, because the address is detected, not configured.
 - **Only 12 MAVROS plugins are loaded (0.5.1).** `minimal_pluginlists.yaml`
   (copied from homebrew_docker, minus `distance_sensor` and `px4flow`, which
   the Astros lack) denies everything not listed. `astro.launch.xml` includes
@@ -332,9 +379,12 @@ serial_number: ''
 - **Bump `app-version` in `auterion-app.yml` for every release.** The build
   file name includes the version.
 - **Discovery server address:** set by `ROS_DISCOVERY_SERVER` in the
-  `Dockerfile`. There is no Fast DDS XML profile. With only this variable set,
-  Fast DDS makes every node a plain CLIENT of that server.
-- **Launch:** the container runs `astro.launch.xml`, which wraps MAVROS's
+  `Dockerfile`. With that variable set, Fast DDS makes every node a plain
+  CLIENT of that server. The only Fast DDS XML profile is the one
+  `astro_entrypoint.sh` generates at start-up (see above); it holds the
+  transport restriction and nothing about discovery.
+- **Launch:** the container runs `astro_entrypoint.sh`, which starts
+  `astro.launch.xml`. That file wraps MAVROS's
   `node.launch` (the part of `px4.launch` that matters, with the same
   `px4_config.yaml`) with the namespace, `tgt_system` (fixed at 1), the
   12-plugin list and the remaps above.
