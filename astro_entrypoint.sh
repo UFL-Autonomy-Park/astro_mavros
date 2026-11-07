@@ -15,6 +15,10 @@ if [[ -z "${NAMESPACE:-}" ]]; then
     exit 1
 fi
 
+# SSH for debugging. Port 2222 because of host networking (22 is AuterionOS's).
+# A failure here must not stop MAVROS from starting.
+/usr/sbin/sshd -p 2222 || echo "WARNING: sshd failed to start; no SSH access." >&2
+
 source "/opt/ros/${ROS_DISTRO}/setup.bash"
 
 PROFILE=/tmp/astro_fastdds.xml
