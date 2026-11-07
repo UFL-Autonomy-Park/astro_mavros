@@ -16,10 +16,21 @@
   <set_remap from="/diagnostics" to="/$(var namespace)/diagnostics"/>
   <set_remap from="/move_base_simple/goal" to="/$(var namespace)/move_base_simple/goal"/>
 
-  <include file="$(find-pkg-share mavros)/launch/px4.launch">
+  <!-- Same as mavros's px4.launch (px4_config.yaml, system/component IDs,
+       protocol), except for the plugin list: px4.launch hardcodes
+       px4_pluginlists.yaml (about 60 plugins), so node.launch is included
+       directly with minimal_pluginlists.yaml (a short allowlist) copied into the
+       image by the Dockerfile. -->
+  <include file="$(find-pkg-share mavros)/launch/node.launch">
+    <arg name="pluginlists_yaml" value="/minimal_pluginlists.yaml"/>
+    <arg name="config_yaml" value="$(find-pkg-share mavros)/launch/px4_config.yaml"/>
     <arg name="fcu_url" value="tcp://127.0.0.1:5790"/>
-    <arg name="namespace" value="$(var namespace)"/>
+    <arg name="gcs_url" value=""/>
     <arg name="tgt_system" value="$(var tgt_system)"/>
+    <arg name="tgt_component" value="1"/>
+    <arg name="fcu_protocol" value="v2.0"/>
+    <arg name="log_output" value="screen"/>
+    <arg name="namespace" value="$(var namespace)"/>
     <arg name="respawn_mavros" value="true"/>
   </include>
 </launch>

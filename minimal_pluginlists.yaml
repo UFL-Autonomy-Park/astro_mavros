@@ -1,0 +1,47 @@
+
+# Minimal MAVROS plugin set for the Astros, copied from homebrew_docker's
+# config/mavros/minimal_pluginlists.yaml. Used by astro.launch.xml instead of
+# px4.launch's stock list (px4_pluginlists.yaml), which denies only 5 plugins
+# and so loads about 60. Since MAVROS 2.15 each plugin is its own ROS node.
+#
+# Semantics (mavros/src/lib/mavros_uas.cpp, is_plugin_allowed): a plugin that
+# matches the denylist loads only if it also matches the allowlist. Patterns
+# are fnmatch globs, case-insensitive. "*" below denies everything not listed.
+#
+# Topic/service ownership was read from a running MAVROS. Names are relative
+# to <vehicle namespace>/mavros/, e.g. /astro1/mavros/state: MAVROS 2.16 puts
+# every plugin's topics and services there (2.14 used /astro1/state).
+# All 12 plugins below were seen to initialize with MAVROS 2.16.0
+# (2026-10-15, amd64, on the lab PC); not yet verified on an Astro.
+/**:
+  ros__parameters:
+    plugin_denylist:
+      - '*'
+    plugin_allowlist:
+      # state, extended_state, battery, sys_status, statustext/recv;
+      # services set_mode (OFFBOARD, AUTO.RTL, AUTO.LOITER, ...)
+      - sys_status
+      # time_reference, timesync_status. Keeps FCU time synchronised.
+      - sys_time
+      # services cmd/arming, cmd/takeoff, cmd/land, cmd/command, ...
+      - command
+      # global_position/local, /global, /set_gp_origin, /raw/fix
+      - global_position
+      # home_position/home. global_position subscribes to it.
+      - home_position
+      # local_position/velocity_local, /pose, /odom
+      - local_position
+      # altitude
+      - altitude
+      # imu/data, imu/data_raw, ... Supplies the attitude MAVROS uses to fill
+      # the orientation of its pose/odometry topics.
+      - imu
+      # gpsstatus/gps1/raw, gpsstatus/gps1/rtk
+      - gps_status
+      # gps_rtk/send_rtcm: RTCM to the FCU (RTK)
+      - gps_rtk
+      # setpoint_raw/local
+      - setpoint_raw
+      # setpoint_velocity/cmd_vel
+      - setpoint_velocity
+

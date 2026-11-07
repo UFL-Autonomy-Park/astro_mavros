@@ -76,5 +76,6 @@ ENV ROS_DISCOVERY_SERVER=192.168.1.201:11811
 
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh && fastdds shm clean && ros2 daemon stop && ros2 daemon start
 COPY astro.launch.xml /astro.launch.xml
+COPY minimal_pluginlists.yaml /minimal_pluginlists.yaml
 # NAMESPACE comes from the app settings (settings.default.env)
 CMD . /opt/ros/${ROS_DISTRO}/setup.sh && ros2 launch /astro.launch.xml namespace:=${NAMESPACE:?set NAMESPACE in the app settings}
