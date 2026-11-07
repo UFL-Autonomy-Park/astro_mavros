@@ -75,7 +75,14 @@ ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 ENV ROS_DISCOVERY_SERVER=192.168.1.201:11811
 
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh && fastdds shm clean && ros2 daemon stop && ros2 daemon start
+# SSH access for debugging (public key only). The app runs with host networking,
+# so sshd listens on 2222 to avoid clashing with AuterionOS's own sshd on 22.
+RUN mkdir -p /root/.ssh && chmod 700 /root/.ssh && \
+    echo "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIL/Ni9BuAI/rpw+oQnlYX69VZ5jRp9+4TBGRs9w/A/YR astro_mavros" >> /root/.ssh/authorized_keys && \
+    chmod 600 /root/.ssh/authorized_keys && \
+    mkdir -p /run/sshd
+
 COPY astro.launch.xml /astro.launch.xml
 COPY minimal_pluginlists.yaml /minimal_pluginlists.yaml
 # NAMESPACE comes from the app settings (settings.default.env)
-CMD . /opt/ros/${ROS_DISTRO}/setup.sh && ros2 launch /astro.launch.xml namespace:=${NAMESPACE:?set NAMESPACE in the app settings}
+CMD /usr/sbin/sshd -p 2222 && . /opt/ros/${ROS_DISTRO}/setup.sh && ros2 launch /astro.launch.xml namespace:=${NAMESPACE:?set NAMESPACE in the app settings}

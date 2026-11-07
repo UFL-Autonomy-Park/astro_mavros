@@ -1,4 +1,4 @@
-auterion-api-version: 1
+auterion-api-version: 4
 auterion-app-base: v2
 
 app-name: astro_mavros
@@ -9,6 +9,7 @@ target-platform: skynode
 services:
   astro_mavros:
     build: .
+    ssh: true
 
 compose-override:
     services:
