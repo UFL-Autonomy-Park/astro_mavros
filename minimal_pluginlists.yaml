@@ -1,6 +1,6 @@
 
 # Minimal MAVROS plugin set for the Astros, copied from homebrew_docker's
-# config/mavros/minimal_pluginlists.yaml. Used by astro.launch.xml instead of
+# config/mavros/minimal_pluginlists.yaml. Used by astro.launch.py instead of
 # px4.launch's stock list (px4_pluginlists.yaml), which denies only 5 plugins
 # and so loads about 60. Since MAVROS 2.15 each plugin is its own ROS node.
 #

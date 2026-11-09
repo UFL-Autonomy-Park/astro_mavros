@@ -73,4 +73,4 @@ else
     echo "WARNING: starting with every interface advertised; reliable traffic to the Astro will fail." >&2
 fi
 
-exec ros2 launch /astro.launch.xml "namespace:=${NAMESPACE}"
+exec ros2 launch /astro.launch.py "namespace:=${NAMESPACE}"

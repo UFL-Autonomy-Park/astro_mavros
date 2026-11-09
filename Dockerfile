@@ -75,7 +75,7 @@ ENV RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 ENV ROS_DISCOVERY_SERVER=192.168.1.201:11811
 
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh && fastdds shm clean && ros2 daemon stop && ros2 daemon start
-COPY astro.launch.xml /astro.launch.xml
+COPY astro.launch.py /astro.launch.py
 COPY minimal_pluginlists.yaml /minimal_pluginlists.yaml
 # Restricts Fast DDS to the LAN address, then launches MAVROS (README section 4).
 # NAMESPACE comes from the app settings (settings.default.env)
