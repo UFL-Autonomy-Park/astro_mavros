@@ -108,26 +108,40 @@ Then restart the app: click **Stop**, then **Start**, in the gear icon menu.
 
 ### 2.1 MAVLink system IDs
 
-MAVROS links its internal router and plugins over the absolute topics
-`/uas<tgt_system>/mavlink_source` and `/uas<tgt_system>/mavlink_sink`. The
-namespace does not apply to them, and `tgt_system` must equal the flight
-controller's `MAV_SYS_ID`. If two vehicles share an ID, they share these topics
-through the discovery server, and one vehicle's MAVROS can report the other's
-data under its own namespace.
+MAVROS links its internal router and plugins over two topics,
+`<prefix>/mavlink_source` and `<prefix>/mavlink_sink`, and `tgt_system` must
+equal the flight controller's `MAV_SYS_ID`. MAVROS's own `mavros_node` fixes the
+prefix to the absolute `/uas<tgt_system>`, which the namespace does not apply
+to. If two vehicles share an ID, they share these topics through the discovery
+server: one vehicle's MAVROS reports the other's data under its own namespace,
+and commands sent to one can reach the other's flight controller.
 
 **The Astros' `MAV_SYS_ID` cannot be changed.** Freefly reverts it to 1,
 whether you change it from AMC or from the Herelink controller. So
-`astro.launch.xml` fixes `tgt_system` at 1, and every Astro uses `/uas1`.
+`tgt_system` is fixed at 1. Since 0.6.0, `astro.launch.py` starts MAVROS
+without `mavros_node` and gives each Astro its own prefix,
+`/<namespace>/uas1` (e.g. `/astro1/uas1/mavlink_source`), so two Astros no
+longer share any MAVLink topic.
 
-- **No other vehicle may use system ID 1** while an Astro is on the network.
-  This was the original bug: the homebrews were on the PX4 default of 1 and
-  showed Astro data under their own namespaces.
-- **Astro to Astro:** with two Astros side by side, echoing each one's topics
-  showed no bleed (tested 2026-10-08). Why is unknown: they do share `/uas1`.
-  **Sending commands to one Astro while another is on has not been tested.**
-  Before relying on it, do the check below.
+- **Before 0.6.0, every Astro used `/uas1`.** On 2026-10-08 two Astros showed
+  no bleed, most likely because of the network fault fixed in 0.5.2 (see §4;
+  not verified): the Astros could not reach each other's data. After that fix,
+  on 2026-11-09, astro1's data appeared under astro2's topics.
+- **Astros and homebrews:** the homebrews use `/uas<their ID>`, the Astros
+  `/<namespace>/uas1`, so they no longer collide. A homebrew with ID 1 has
+  not been tested next to an Astro, so keep avoiding it.
+- **Tested on a lab PC with dummy flight controllers** (no Astro): two
+  launches, namespaces `astro1` and `astro2`, each MAVLink topic has exactly
+  one publisher and one subscriber, and no `/uas1` exists.
+- **Tested on two real Astros, 2026-11-09, both on 0.6.0 and powered on:**
+  the topic check below passed. In flight, astro1 took every command and
+  astro2 did nothing. Both held about 30.8 Hz on `local_position/pose`, with
+  no lost messages and no gap over 100 ms, the same as 0.5.2. Only astro1
+  received commands, and astro2 was never flown with astro1 on, so the
+  other direction has not been flown. The check below with the propellers
+  removed is still the safe way to repeat it.
 
-Assigned IDs (keep this table up to date):
+Assigned IDs (example):
 
 | Vehicle    | `NAMESPACE`  | `MAV_SYS_ID` / `tgt_system` |
 |------------|--------------|-----------------------------|
@@ -142,12 +156,16 @@ New non-Astro vehicles need a unique ID other than 1 (the Astros) and 255
 The Astros have no gimbal. If one is added, `MNT_MAV_SYSID` (default 1)
 already matches, since `MAV_SYS_ID` stays 1.
 
-To list the shared topics from any machine on the network:
+To list the MAVLink topics from any machine on the network:
 
 ```bash
-ros2 topic list | grep '^/uas'
-ros2 topic info -v /uas1/mavlink_source   # one publisher per Astro that is on
+ros2 topic list | grep uas
+ros2 topic info -v /astro1/uas1/mavlink_source
 ```
+
+Each should have one publisher and one subscriber. A bare `/uas1/...` in the
+list means a vehicle other than these Astros (or an Astro older than 0.6.0)
+is using it.
 
 #### Checking that commands don't cross between Astros
 
@@ -162,12 +180,12 @@ ros2 service call /astro1/mavros/cmd/arming mavros_msgs/srv/CommandBool "{value:
 
 If astro2 arms too, or `/astro1/mavros/cmd/arming` reports success while astro1
 stays disarmed, commands are crossing. In that case, don't run more than one
-Astro with MAVROS at a time.
+Astro with MAVROS at a time, and check that both run 0.6.0 or later.
 
 ### 2.2 Other shared topics
 
 MAVROS also uses `/tf`, `/tf_static`, `/diagnostics` and
-`/move_base_simple/goal` under absolute names. `astro.launch.xml` remaps
+`/move_base_simple/goal` under absolute names. `astro.launch.py` remaps
 them under the namespace, e.g. `/astro1/tf`, so vehicles don't hear each
 other's transforms. `/rosout` and `/parameter_events` stay shared by design.
 
@@ -312,12 +330,47 @@ serial_number: ''
   Destinations other than the Astro's LAN address mean it is advertising
   another address again. A DHCP change of the Astro's address is handled at
   start-up, because the address is detected, not configured.
+- **Each Astro has its own MAVLink topics (0.6.0).** `astro.launch.py`
+  replaces `astro.launch.xml`, which started MAVROS's `mavros_node`.
+  `mavros_node` is one program that runs MAVROS's router and its UAS node (the
+  one that loads the plugins) in a single process, and it builds the topic
+  prefix itself as `/uas<tgt_system>`. The Astros' system ID is fixed at 1 by
+  Freefly, so the prefix could not be changed. `astro.launch.py` starts the
+  same two components (`mavros::router::Router` and `mavros::uas::UAS`, as in
+  MAVROS's `test_compose.launch.py`) in a `component_container_mt` with
+  `uas_url` set to `/<namespace>/uas1`.
+
+  **Why.** After 0.5.2 let the Astros reach each other, astro1's data showed
+  up under astro2's topics (checked with
+  `ros2 topic echo --field altitude /astro2/mavros/global_position/raw/fix`:
+  two distinct sets of values). `/uas1/mavlink_source` and `/uas1/mavlink_sink`
+  each had two publishers and two subscribers. The sink carries commands, so
+  an arm or setpoint for one Astro could also have reached the other's flight
+  controller.
+
+  **Checked against the old launch** (lab PC, private DDS domain, dummy FCU
+  URL): the same 15 nodes, 18 services and plugin set, the same 54 other
+  topics, and identical parameters on all 12 plugin nodes. The only
+  differences are `uas_url`, the FCU URL used for the test, and the two
+  MAVLink topics moving under the namespace. Not tested on an Astro.
+
+  **Differences to watch for.**
+  - Composed nodes do not inherit the container's parameters or remaps, so
+    `astro.launch.py` gives the UAS node the allowlist and `/**` settings, and
+    each node the `/tf`, `/diagnostics` remaps. A missing remap shows up as a
+    bare `/diagnostics` or `/tf` in `ros2 topic list`.
+  - `mavros_node` ran its own executor; this uses `component_container_mt`.
+    The Skynode's CPU was a problem before (the 0.5.1 note), so on the first
+    install check `ros2 topic hz /astro1/mavros/local_position/pose`: it
+    should settle at about 30 Hz and stay there.
+  - If MAVROS is upgraded, check `uas_url` and the two components against
+    `test_compose.launch.py` in the new version.
 - **Only 12 MAVROS plugins are loaded (0.5.1).** `minimal_pluginlists.yaml`
   (copied from homebrew_docker, minus `distance_sensor` and `px4flow`, which
-  the Astros lack) denies everything not listed. `astro.launch.xml` includes
-  MAVROS's `node.launch` directly with it, because `px4.launch` hardcodes
-  `px4_pluginlists.yaml`, which denies only 5 plugins and so loads about 60.
-  Since 2.15 each plugin is its own ROS node.
+  the Astros lack) denies everything not listed. `astro.launch.py` loads it
+  itself, because `px4.launch` hardcodes `px4_pluginlists.yaml`, which denies
+  only 5 plugins and so loads about 60. Since 2.15 each plugin is its own ROS
+  node.
 
   **Why.** On 2026-11-06, astro1 (MAVROS 2.16.0, stock list) showed topics
   that arrived in bursts: `local_position/pose` and `imu/data` swung between
@@ -388,7 +441,6 @@ serial_number: ''
   `astro_entrypoint.sh` generates at start-up (see above); it holds the
   transport restriction and nothing about discovery.
 - **Launch:** the container runs `astro_entrypoint.sh`, which starts
-  `astro.launch.xml`. That file wraps MAVROS's
-  `node.launch` (the part of `px4.launch` that matters, with the same
-  `px4_config.yaml`) with the namespace, `tgt_system` (fixed at 1), the
-  12-plugin list and the remaps above.
+  `astro.launch.py`. It uses the same `px4_config.yaml` as `px4.launch` and
+  takes the namespace, `tgt_system` (fixed at 1), the 12-plugin list and the
+  remaps above.
