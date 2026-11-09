@@ -132,9 +132,14 @@ longer share any MAVLink topic.
   not been tested next to an Astro, so keep avoiding it.
 - **Tested on a lab PC with dummy flight controllers** (no Astro): two
   launches, namespaces `astro1` and `astro2`, each MAVLink topic has exactly
-  one publisher and one subscriber, and no `/uas1` exists. **Sending commands
-  to one Astro while another is on has not been tested on real Astros.**
-  Do the check below before relying on it.
+  one publisher and one subscriber, and no `/uas1` exists.
+- **Tested on two real Astros, 2026-11-09, both on 0.6.0 and powered on:**
+  the topic check below passed. In flight, astro1 took every command and
+  astro2 did nothing. Both held about 30.8 Hz on `local_position/pose`, with
+  no lost messages and no gap over 100 ms, the same as 0.5.2. Only astro1
+  received commands, and astro2 was never flown with astro1 on, so the
+  other direction has not been flown. The check below with the propellers
+  removed is still the safe way to repeat it.
 
 Assigned IDs (example):
 
